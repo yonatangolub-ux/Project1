@@ -1,0 +1,10 @@
+{
+  "name": "tik-hatiyul",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/core.test.mjs",
+    "e2e": "node tests/e2e.mjs",
+    "serve": "node tests/serve.mjs"
+  }
+}

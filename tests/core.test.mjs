@@ -1,0 +1,113 @@
+// בדיקות ללוגיקה הטהורה ב-core.js. כל המידע כאן מזויף.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  splitTransitions, activeUntil, formatLocal, untilText, statusText,
+  offsetString, withOffset, toLocalInputValue, offsetOf, parseImport,
+  docNamesFromText, GRACE_MS,
+} from '../core.js';
+
+const H = 3600 * 1000;
+const t = (id, start, end) => ({ id, title: id, start, ...(end ? { end } : {}) });
+
+test('המעבר הבא הוא הראשון לפי שעת יציאה, ומעבר שעבר נעלם', () => {
+  const list = [
+    t('c', '2030-01-12T10:00:00+07:00'),
+    t('a', '2030-01-10T10:00:00+07:00', '2030-01-10T12:00:00+07:00'),
+    t('b', '2030-01-11T10:00:00+07:00'),
+  ];
+  const now = Date.parse('2030-01-10T13:00:00+07:00'); // a כבר נגמר
+  const { next, later } = splitTransitions(list, now);
+  assert.equal(next.id, 'b');
+  assert.deepEqual(later.map(x => x.id), ['c']);
+});
+
+test('מעבר שהתחיל ועוד לא נגמר נשאר המעבר הבא', () => {
+  const list = [t('a', '2030-01-10T10:00:00+07:00', '2030-01-10T20:00:00+07:00'), t('b', '2030-01-11T10:00:00+07:00')];
+  const now = Date.parse('2030-01-10T15:00:00+07:00');
+  assert.equal(splitTransitions(list, now).next.id, 'a');
+});
+
+test('מעבר בלי שעת הגעה פעיל עד 6 שעות אחרי היציאה', () => {
+  const a = t('a', '2030-01-10T10:00:00+00:00');
+  assert.equal(activeUntil(a), Date.parse('2030-01-10T10:00:00Z') + GRACE_MS);
+  assert.equal(GRACE_MS, 6 * H);
+  assert.equal(splitTransitions([a], Date.parse('2030-01-10T15:59:00Z')).next.id, 'a');
+  assert.equal(splitTransitions([a], Date.parse('2030-01-10T16:01:00Z')).next, null);
+});
+
+test('סדר לפי זמן אמיתי גם כשאזורי הזמן שונים', () => {
+  // 16:05 בקטמנדו (10:20Z) מוקדם מ-14:00 בשעון +08:00 (06:00Z)? לא: 06:00Z מוקדם יותר
+  const list = [t('ktm', '2030-01-10T16:05:00+05:45'), t('east', '2030-01-10T14:00:00+08:00')];
+  const { next, later } = splitTransitions(list, Date.parse('2030-01-10T00:00:00Z'));
+  assert.equal(next.id, 'east');
+  assert.equal(later[0].id, 'ktm');
+});
+
+test('אין מעברים: אין מעבר הבא', () => {
+  assert.deepEqual(splitTransitions([], Date.now()), { next: null, later: [] });
+});
+
+test('השעה מוצגת לפי השעון של המקום, לא של הטלפון', () => {
+  // 10.1.2030 הוא יום חמישי
+  assert.equal(formatLocal('2030-01-10T16:05:00+05:45'), 'יום ה׳ 10.1 · 16:05');
+  assert.equal(formatLocal('2030-01-11T07:25:00+08:00'), 'יום ו׳ 11.1 · 07:25');
+  assert.equal(formatLocal('2030-01-13T00:30:00Z'), 'יום א׳ 13.1 · 00:30');
+});
+
+test('ספירה לאחור בעברית', () => {
+  const M = 60 * 1000;
+  assert.equal(untilText(5 * M), 'בעוד 5 דק׳');
+  assert.equal(untilText(0), 'בעוד פחות מדקה');
+  assert.equal(untilText(1 * H), 'בעוד שעה');
+  assert.equal(untilText(1 * H + 20 * M), 'בעוד שעה ו-20 דק׳');
+  assert.equal(untilText(3 * H + 5 * M), 'בעוד 3 שעות ו-5 דק׳');
+  assert.equal(untilText(24 * H), 'בעוד יום');
+  assert.equal(untilText(26 * H), 'בעוד יום ו-2 שעות');
+  assert.equal(untilText(3 * 24 * H + 4 * H), 'בעוד 3 ימים');
+});
+
+test('סטטוס: לפני יציאה, ובדרך', () => {
+  const a = t('a', '2030-01-10T10:00:00Z', '2030-01-10T12:00:00Z');
+  assert.equal(statusText(a, Date.parse('2030-01-10T08:00:00Z')), 'בעוד 2 שעות');
+  assert.equal(statusText(a, Date.parse('2030-01-10T11:00:00Z')), 'עכשיו, בדרך');
+});
+
+test('אזור זמן: כתיבה וקריאה', () => {
+  assert.equal(offsetString(345), '+05:45');
+  assert.equal(offsetString(-180), '-03:00');
+  assert.equal(offsetString(0), '+00:00');
+  assert.equal(withOffset('2030-01-10T19:00', 420), '2030-01-10T19:00:00+07:00');
+  assert.equal(toLocalInputValue('2030-01-10T16:05:00+05:45'), '2030-01-10T16:05');
+  assert.equal(offsetOf('2030-01-10T16:05:00+05:45'), '+05:45');
+  assert.equal(offsetOf('2030-01-10T16:05:00Z'), '+00:00');
+});
+
+test('שמות מסמכים מטקסט עם פסיקים', () => {
+  assert.deepEqual(docNamesFromText(' כרטיס, דרכון ,,כרטיס '), ['כרטיס', 'דרכון']);
+  assert.deepEqual(docNamesFromText(''), []);
+});
+
+const valid = {
+  transitions: [{
+    id: 'x1', title: 'טיסה', start: '2030-01-10T16:05:00+05:45', end: '2030-01-10T21:15:00+08:00',
+    from: 'א', to: 'ב', notes: 'שורה 1\nשורה 2', docs: ['כרטיס', 'דרכון'],
+  }],
+  pinned: ['דרכון', 'ויזה'],
+};
+
+test('ייבוא תקין, גם כשהקוד מגיע עטוף ב-```', () => {
+  const r = parseImport('```json\n' + JSON.stringify(valid) + '\n```');
+  assert.equal(r.transitions.length, 1);
+  assert.equal(r.transitions[0].notes, 'שורה 1\nשורה 2');
+  assert.deepEqual(r.pinned, ['דרכון', 'ויזה']);
+});
+
+test('ייבוא שגוי מחזיר הודעה ברורה בעברית', () => {
+  assert.throws(() => parseImport('זה לא קוד'), /לא הצלחתי לקרוא את הקוד/);
+  assert.throws(() => parseImport('[]'), /חסר/);
+  assert.throws(() => parseImport(JSON.stringify({ transitions: [{ id: 'a', start: '2030-01-10T10:00:00Z' }] })), /מעבר 1: חסרה כותרת/);
+  assert.throws(() => parseImport(JSON.stringify({ transitions: [{ id: 'a', title: 'x', start: '2030-01-10T10:00' }] })), /מעבר 1: .*אזור זמן/);
+  assert.throws(() => parseImport(JSON.stringify({ transitions: [{ id: 'a', title: 'x', start: '2030-01-10T10:00:00Z', end: '2030-01-10T09:00:00Z' }] })), /מעבר 1: ההגעה לפני היציאה/);
+  assert.throws(() => parseImport(JSON.stringify({ transitions: [{ title: 'x', start: '2030-01-10T10:00:00Z' }] })), /מעבר 1: חסר id/);
+});
