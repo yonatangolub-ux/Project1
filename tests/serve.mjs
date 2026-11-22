@@ -11,7 +11,8 @@ const TYPES = {
   '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf',
 };
 
-export function serve(port = 8080, prefix = '/Project1') {
+// overrides: מפה של נתיב ← תוכן, כדי לדמות גרסה חדשה של קובץ בבדיקה
+export function serve(port = 8080, prefix = '/Project1', overrides = new Map()) {
   const server = http.createServer(async (req, res) => {
     try {
       let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -20,7 +21,7 @@ export function serve(port = 8080, prefix = '/Project1') {
       if (p.endsWith('/')) p += 'index.html';
       const file = path.join(root, p);
       if (!file.startsWith(root + path.sep)) throw new Error('outside root');
-      const data = await readFile(file);
+      const data = overrides.has(p) ? overrides.get(p) : await readFile(file);
       res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
       res.end(data);
     } catch {

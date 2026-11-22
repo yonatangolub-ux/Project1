@@ -35,7 +35,10 @@ async function load() {
 
 function render() {
   const now = Date.now();
-  const { next, later } = splitTransitions(state.transitions, now);
+  const { arrived, next, later } = splitTransitions(state.transitions, now);
+
+  // מה שנחת ב-6 השעות האחרונות נשאר למעלה, עם ההערות של "מה לעשות כשמגיעים"
+  $('#arrived').replaceChildren(...(arrived ? [h('h2', { class: 'label' }, 'הגעת'), card(arrived, now)] : []));
 
   $('#next').replaceChildren(
     h('h2', { class: 'label' }, 'המעבר הבא'),
@@ -318,11 +321,28 @@ async function updateStatus() {
     ? `✓ מוכן לעבודה בלי רשת${persisted ? ' · ✓ האחסון קבוע' : ''}`
     : '⏳ עוד לא מוכן לעבודה בלי רשת. צריך לפתוח פעם אחת עם אינטרנט.';
   el.classList.toggle('ok', ready);
+  showVersion();
+}
+
+// מספר הגרסה בא משם ה-cache ב-sw.js, כדי שיהיה לו מקור אחד בלבד
+async function showVersion() {
+  try {
+    const versions = (await caches.keys())
+      .map((n) => /^tik-v(\d+)$/.exec(n)).filter(Boolean).map((m) => +m[1]);
+    $('#app-version').textContent = versions.length ? `גרסה ${Math.max(...versions)}` : '';
+  } catch {
+    // בלי cache אין מספר גרסה, וזה בסדר
+  }
 }
 
 if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('./sw.js').catch((e) => console.error(e));
-  navigator.serviceWorker.addEventListener('controllerchange', updateStatus);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // עדכון לגרסה חדשה: טוענים מחדש פעם אחת כדי שהקוד החדש ירוץ. בהתקנה ראשונה אין צורך.
+    if (hadController) location.reload();
+    else updateStatus();
+  });
 }
 navigator.storage?.persist?.().catch(() => {});
 

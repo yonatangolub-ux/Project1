@@ -45,7 +45,36 @@ test('סדר לפי זמן אמיתי גם כשאזורי הזמן שונים', 
 });
 
 test('אין מעברים: אין מעבר הבא', () => {
-  assert.deepEqual(splitTransitions([], Date.now()), { next: null, later: [] });
+  assert.deepEqual(splitTransitions([], Date.now()), { arrived: null, next: null, later: [] });
+});
+
+// באג שנמצא במעבר משתמש: הערות "מה לעשות כשמגיעים" נעלמו בדיוק ברגע ההגעה.
+test('אחרי נחיתה המעבר מוצג ב"הגעת" 6 שעות, ולא נעלם ברגע ההגעה', () => {
+  const flight = { ...t('f', '2030-01-10T07:25:00+08:00', '2030-01-10T08:00:00+07:00'), notes: 'לינה' };
+  assert.equal(splitTransitions([flight], Date.parse('2030-01-10T09:00:00+07:00')).arrived?.id, 'f');
+  assert.equal(splitTransitions([flight], Date.parse('2030-01-10T13:59:00+07:00')).arrived?.id, 'f');
+  assert.equal(splitTransitions([flight], Date.parse('2030-01-10T14:01:00+07:00')).arrived, null);
+});
+
+test('חיבור צפוף: מה שנחת וגם המעבר הבא מוצגים יחד', () => {
+  const bus = t('bus', '2030-01-09T20:00:00+07:00', '2030-01-10T04:00:00+07:00');
+  const loop = t('loop', '2030-01-10T08:00:00+07:00');
+  const r = splitTransitions([loop, bus], Date.parse('2030-01-10T06:00:00+07:00'));
+  assert.equal(r.arrived?.id, 'bus');
+  assert.equal(r.next?.id, 'loop');
+  assert.deepEqual(r.later, []);
+});
+
+test('כשכמה מעברים נחתו, מוצג רק האחרון', () => {
+  const a = t('a', '2030-01-10T06:00:00Z', '2030-01-10T07:00:00Z');
+  const b = t('b', '2030-01-10T08:00:00Z', '2030-01-10T09:00:00Z');
+  assert.equal(splitTransitions([b, a], Date.parse('2030-01-10T10:00:00Z')).arrived?.id, 'b');
+});
+
+test('מעבר בלי שעת הגעה לא נכנס ל"הגעת"', () => {
+  const a = t('a', '2030-01-10T10:00:00Z');
+  assert.equal(splitTransitions([a], Date.parse('2030-01-10T12:00:00Z')).arrived, null);
+  assert.equal(splitTransitions([a], Date.parse('2030-01-10T17:00:00Z')).arrived, null);
 });
 
 test('השעה מוצגת לפי השעון של המקום, לא של הטלפון', () => {
@@ -67,10 +96,13 @@ test('ספירה לאחור בעברית', () => {
   assert.equal(untilText(3 * 24 * H + 4 * H), 'בעוד 3 ימים');
 });
 
-test('סטטוס: לפני יציאה, ובדרך', () => {
+test('סטטוס: לפני יציאה, בדרך, והגעת', () => {
   const a = t('a', '2030-01-10T10:00:00Z', '2030-01-10T12:00:00Z');
   assert.equal(statusText(a, Date.parse('2030-01-10T08:00:00Z')), 'בעוד 2 שעות');
   assert.equal(statusText(a, Date.parse('2030-01-10T11:00:00Z')), 'עכשיו, בדרך');
+  assert.equal(statusText(a, Date.parse('2030-01-10T13:00:00Z')), 'הגעת');
+  // בלי שעת הגעה אין "הגעת"
+  assert.equal(statusText(t('b', '2030-01-10T10:00:00Z'), Date.parse('2030-01-10T13:00:00Z')), 'עכשיו, בדרך');
 });
 
 test('אזור זמן: כתיבה וקריאה', () => {

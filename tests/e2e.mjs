@@ -1,7 +1,7 @@
 // בדיקת קצה לקצה בגודל טלפון: ייבוא, מסמכים, טופס, ואז בלי רשת.
 // כל המידע כאן מזויף. צילומי מסך נשמרים ב-E2E_OUT (ברירת מחדל: test-results/).
 import { createRequire } from 'node:module';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { serve } from './serve.mjs';
 
 const require = createRequire(import.meta.url);
@@ -28,7 +28,10 @@ function iso(ms, offMin) {
 }
 
 await mkdir(OUT, { recursive: true });
-const server = await serve(PORT);
+const swSource = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+const VERSION = /tik-v(\d+)/.exec(swSource)[1];
+const overrides = new Map();
+const server = await serve(PORT, '/Project1', overrides);
 const browser = await chromium.launch();
 
 try {
@@ -59,6 +62,8 @@ try {
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 20000 });
   await page.waitForSelector('#offline-status.ok');
   check(true, 'ה-Service Worker פעיל והמחוון מראה "מוכן לעבודה בלי רשת"');
+  await page.waitForFunction((v) => document.querySelector('#app-version').textContent === `גרסה ${v}`, VERSION, { timeout: 5000 })
+    .then(() => check(true, `מספר הגרסה מוצג (גרסה ${VERSION})`), () => check(false, 'מספר הגרסה מוצג'));
   check(await page.isVisible('text=אין מעברים קרובים'), 'מסך ריק מסביר מה לעשות');
 
   // ייבוא, עטוף ב-``` כמו שמעתיקים מהצ'אט
@@ -69,6 +74,9 @@ try {
         from: 'עיר א', to: 'עיר ב', notes: 'להגיע שעתיים לפני.\nמזוודה אחת.', docs: ['כרטיס', 'דרכון'] },
       { id: 'f2', title: 'טיסה שנייה', start: iso(now + 20 * H, 480), end: iso(now + 22 * H, 420), docs: ['כרטיס'] },
       { id: 'old', title: 'מעבר שעבר', start: iso(now - 30 * H, 0), end: iso(now - 20 * H, 0) },
+      { id: 'landed', title: 'טיסה שנחתה', start: iso(now - 3 * H, 480), end: iso(now - 1 * H, 420),
+        notes: 'הערת נחיתה מזויפת', docs: ['כרטיס'] },
+      { id: 'landed-old', title: 'טיסה שנחתה מזמן', start: iso(now - 10 * H, 0), end: iso(now - 7 * H, 0) },
     ],
     pinned: ['דרכון', 'ויזה'],
   };
@@ -83,6 +91,11 @@ try {
   check(!(await page.isVisible('text=מעבר שעבר')), 'מעבר שעבר לא מוצג');
   check(await page.isVisible('#later summary:has-text("טיסה שנייה")'), 'המעבר שאחריו נמצא ב"אחר כך"');
   check(/בעוד (2|3) שעות/.test(await page.textContent('#next .when')), 'ספירה לאחור');
+  // הבאג שתוקן: מה שנחת לפני שעה נשאר למעלה עם ההערות שלו
+  check(await page.isVisible('#arrived h1:has-text("טיסה שנחתה")'), 'טיסה שנחתה לפני שעה מוצגת ב"הגעת"');
+  check((await page.textContent('#arrived .notes')).includes('הערת נחיתה מזויפת'), 'ההערות של מה שנחת מוצגות');
+  check((await page.textContent('#arrived .when')).includes('הגעת'), 'הסטטוס הוא "הגעת"');
+  check(!(await page.isVisible('text=טיסה שנחתה מזמן')), 'מה שנחת לפני 7 שעות כבר לא מוצג');
 
   // ייבוא חוזר עם אותו id מעדכן
   await page.click('#btn-import');
@@ -109,6 +122,7 @@ try {
   await page.waitForSelector('#pinned button.doc.has:has-text("ביטוח")');
   check(true, 'מסמך קבוע חדש נוסף דרך החלון');
   await page.waitForTimeout(3200); // שההודעה תיעלם לפני הצילום
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${OUT}/1-main.png` });
 
   await page.click('#next button.doc.has:has-text("כרטיס")');
@@ -164,6 +178,18 @@ try {
 
   check(errors.length === 0, `אין שגיאות בקונסול${errors.length ? ': ' + errors.join(' | ') : ''}`);
 
+  // עדכון לגרסה חדשה, כמו שיקרה בטלפון: פותחים את האפליקציה (כבר מותקנת), ה-Service Worker החדש
+  // נכנס, הדף נטען מחדש לבד פעם אחת, והמידע נשאר.
+  await page.reload();
+  await page.waitForSelector('#next h1:has-text("טיסה מזויפת")');
+  const NEXT = String(+VERSION + 1);
+  overrides.set('/sw.js', swSource.replace(`tik-v${VERSION}`, `tik-v${NEXT}`));
+  await page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r.update())).catch(() => {});
+  const updated = await page.waitForFunction((v) => document.querySelector('#app-version')?.textContent === `גרסה ${v}`, NEXT, { timeout: 20000 })
+    .then(() => true, () => false);
+  check(updated, `עדכון: הגרסה החדשה (${NEXT}) נטענה לבד`);
+  check(await page.isVisible('#next h1:has-text("טיסה מזויפת")'), 'עדכון: המידע והמסמכים נשארו');
+
   // בלי רשת: טעינה מחדש, וגם פתיחה בלשונית חדשה (כמו מהמסך הבית)
   await ctx.setOffline(true);
   await page.reload();
@@ -173,6 +199,7 @@ try {
   await fresh.goto(BASE);
   await fresh.waitForSelector('#next h1:has-text("טיסה מזויפת")', { timeout: 10000 });
   check(true, 'בלי רשת: פתיחה מחדש של האפליקציה עובדת');
+  check(await fresh.isVisible('#arrived .notes:has-text("הערת נחיתה מזויפת")'), 'בלי רשת: "הגעת" מוצג עם ההערות');
   await fresh.click('#next button.doc.has:has-text("כרטיס")');
   await fresh.waitForSelector('#viewer:not([hidden]) img');
   check(await fresh.$eval('#viewer img', (img) => img.complete && img.naturalWidth >= 1000), 'בלי רשת: הכרטיס נפתח');
@@ -182,6 +209,8 @@ try {
   check(await fresh.$eval('#viewer img', (img) => img.complete && img.naturalWidth > 0), 'בלי רשת: הדרכון נפתח');
   check(await fresh.isHidden('#viewer-original'), 'לתמונה אין כפתור "קובץ מקורי"');
   await fresh.goBack();
+  await fresh.waitForTimeout(300); // הדפדפן משחזר את מיקום הגלילה אחרי "חזרה"
+  await fresh.evaluate(() => window.scrollTo(0, 0));
   await fresh.screenshot({ path: `${OUT}/3-offline.png` });
 } catch (e) {
   console.error('✗ הבדיקה נעצרה:', e.message);
