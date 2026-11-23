@@ -177,19 +177,29 @@ try {
   const tap = { x: Math.round(imgBox.left + imgBox.width * 0.7), y: Math.round(imgBox.top + 400) }; // נקודה שרואים על המסך
   const ry = (tap.y - imgBox.top) / imgBox.height;
   await page.touchscreen.tap(tap.x, tap.y);
+  await page.waitForTimeout(600);
+  check(await page.$eval('#viewer-pages', (p) => !p.classList.contains('zoomed')), 'לחיצה אחת לא מגדילה');
+  await page.touchscreen.tap(tap.x, tap.y);
+  await page.touchscreen.tap(tap.x, tap.y);
   await page.waitForSelector('#viewer-pages.zoomed');
   const z = await page.$eval('#viewer img', (i) => i.getBoundingClientRect().toJSON());
-  check(z.width >= imgBox.width * 2, `לחיצה מגדילה את התמונה (פי ${(z.width / imgBox.width).toFixed(1)})`);
+  check(z.width >= imgBox.width * 2, `לחיצה כפולה מגדילה את התמונה (פי ${(z.width / imgBox.width).toFixed(1)})`);
   const landed = { x: z.left + z.width * 0.7, y: z.top + z.height * ry };
   check(Math.abs(landed.x - tap.x) <= 3 && Math.abs(landed.y - tap.y) <= 3, 'ההגדלה סביב הנקודה שנלחצה');
   await page.screenshot({ path: `${OUT}/2b-zoomed.png` });
   const scrolled = await page.$eval('#viewer-scroll', (s) => { s.scrollBy(150, 0); return s.scrollLeft; });
   check(scrolled > 0, 'בהגדלה אפשר להזיז את התמונה הצידה');
   check(await page.$eval('#viewer-close', (b) => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), '"סגירה" נשאר על המסך גם בהגדלה');
+  await page.waitForTimeout(600);
+  await page.touchscreen.tap(tap.x, tap.y);
+  await page.waitForTimeout(600);
+  check(await page.$eval('#viewer-pages', (p) => p.classList.contains('zoomed')), 'בהגדלה, לחיצה אחת לא מקטינה');
+  await page.touchscreen.tap(tap.x, tap.y);
   await page.touchscreen.tap(tap.x, tap.y);
   await page.waitForSelector('#viewer-pages:not(.zoomed)');
   const back = await page.$eval('#viewer img', (i) => i.getBoundingClientRect().width);
-  check(Math.abs(back - 412) <= 1, 'לחיצה נוספת מחזירה לגודל רגיל');
+  check(Math.abs(back - 412) <= 1, 'לחיצה כפולה נוספת מחזירה לגודל רגיל');
+  await page.touchscreen.tap(tap.x, tap.y);
   await page.touchscreen.tap(tap.x, tap.y); // שוב מוגדל, כדי לבדוק שפתיחה הבאה מתחילה רגיל
   await page.click('#viewer-close');
   await page.waitForSelector('#viewer', { state: 'hidden' });

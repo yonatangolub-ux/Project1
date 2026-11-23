@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   splitTransitions, activeUntil, formatLocal, untilText, statusText,
   offsetString, withOffset, toLocalInputValue, offsetOf, parseImport,
-  docNamesFromText, GRACE_MS, ZOOM, zoomScroll,
+  docNamesFromText, GRACE_MS, ZOOM, zoomScroll, isDoubleTap,
 } from '../core.js';
 
 const H = 3600 * 1000;
@@ -172,4 +172,13 @@ test('הקטנה חזרה: התמונה נשארת במקום שלה ולא קו
   const content = { width: 400, height: 1800 };
   const pos = zoomScroll({ rx: 0.5, ry: 0.5, img, tap: { x: 200, y: 400 }, view, content });
   assert.deepEqual(pos, { left: 0, top: 600 + 280 - 400 });
+});
+
+// 23.11: לחיצה אחת הגדילה בטעות. מעכשיו רק לחיצה כפולה מגדילה.
+test('לחיצה כפולה: רק שתי לחיצות קרובות בזמן ובמקום', () => {
+  const a = { t: 1000, x: 200, y: 300 };
+  assert.equal(isDoubleTap(null, a), false, 'לחיצה ראשונה לבד היא לא לחיצה כפולה');
+  assert.equal(isDoubleTap(a, { t: 1250, x: 210, y: 305 }), true);
+  assert.equal(isDoubleTap(a, { t: 1600, x: 200, y: 300 }), false, 'רחוק מדי בזמן');
+  assert.equal(isDoubleTap(a, { t: 1200, x: 300, y: 300 }), false, 'רחוק מדי במקום');
 });

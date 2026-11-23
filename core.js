@@ -129,7 +129,7 @@ export function parseImport(text) {
   return { transitions, pinned: strList(data.pinned) };
 }
 
-// הגדלה של מסמך בלחיצה: פי כמה מגדילים.
+// הגדלה של מסמך בלחיצה כפולה: פי כמה מגדילים.
 export const ZOOM = 2.5;
 
 // לאן לגלול אחרי הגדלה או הקטנה, כדי שהנקודה שנלחצה תישאר מתחת לאצבע.
@@ -141,4 +141,13 @@ export function zoomScroll({ rx, ry, img, tap, view, content }) {
     left: fit(img.left + rx * img.width - tap.x, content.width - view.width),
     top: fit(img.top + ry * img.height - tap.y, content.height - view.height),
   };
+}
+
+// לחיצה כפולה: שתי לחיצות קרובות בזמן ובמקום. לחיצה אחת לא עושה כלום, כדי שלחיצה בטעות לא תגדיל.
+export const DOUBLE_TAP_MS = 350;
+export const DOUBLE_TAP_PX = 40;
+export function isDoubleTap(prev, cur) {
+  if (!prev || !cur) return false;
+  const dt = cur.t - prev.t;
+  return dt >= 0 && dt <= DOUBLE_TAP_MS && Math.hypot(cur.x - prev.x, cur.y - prev.y) <= DOUBLE_TAP_PX;
 }

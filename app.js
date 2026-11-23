@@ -3,7 +3,7 @@ import * as db from './db.js';
 import {
   splitTransitions, formatLocal, statusText, parseImport,
   withOffset, toLocalInputValue, offsetMinutesOf, offsetString, docNamesFromText,
-  ZOOM, zoomScroll,
+  ZOOM, zoomScroll, isDoubleTap,
 } from './core.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -187,16 +187,21 @@ function closeViewer() {
   viewerUrls = [];
 }
 
-// לחיצה על המסמך מגדילה אותו סביב הנקודה שנלחצה, לחיצה נוספת מחזירה. הזזה בגלילה רגילה.
+// לחיצה כפולה על המסמך מגדילה אותו סביב הנקודה שנלחצה, לחיצה כפולה נוספת מחזירה. הזזה בגלילה רגילה.
+// לחיצה אחת לא עושה כלום, כדי שלחיצה בטעות (למשל כשמושיטים את הטלפון) לא תגדיל.
+let lastTap = null;
 function setZoomed(on) {
   $('#viewer-pages').classList.toggle('zoomed', on);
   $('#viewer-pages').style.width = on ? `${ZOOM * 100}%` : '';
-  $('#viewer-hint').textContent = on ? 'לחיצה נוספת מקטינה' : 'לחיצה על המסמך מגדילה';
+  $('#viewer-hint').textContent = on ? 'לחיצה כפולה מקטינה' : 'לחיצה כפולה מגדילה';
+  lastTap = null;
 }
 
 $('#viewer-pages').addEventListener('click', (e) => {
   const img = e.target.closest('img');
   if (!img) return;
+  const tapNow = { t: e.timeStamp, x: e.clientX, y: e.clientY };
+  if (!isDoubleTap(lastTap, tapNow)) { lastTap = tapNow; return; }
   const box = img.getBoundingClientRect();
   const rx = (e.clientX - box.left) / box.width;
   const ry = (e.clientY - box.top) / box.height;
