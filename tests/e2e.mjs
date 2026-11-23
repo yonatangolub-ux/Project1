@@ -244,11 +244,15 @@ try {
   await page.waitForSelector('#next h1:has-text("טיסה מזויפת")');
   const NEXT = String(+VERSION + 1);
   overrides.set('/sw.js', swSource.replace(`tik-v${VERSION}`, `tik-v${NEXT}`));
+  // גם קובץ אחר משתנה בגרסה החדשה. הגרסה החדשה חייבת להביא אותו, ולא עותק ישן מהמטמון של הדפדפן.
+  const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  overrides.set('/index.html', indexSource.replace('המידע נשמר רק בטלפון הזה.', 'המידע נשמר רק בטלפון הזה. [סימן-גרסה-חדשה]'));
   await page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r.update())).catch(() => {});
   const updated = await page.waitForFunction((v) => document.querySelector('#app-version')?.textContent === `גרסה ${v}`, NEXT, { timeout: 20000 })
     .then(() => true, () => false);
   check(updated, `עדכון: הגרסה החדשה (${NEXT}) נטענה לבד`);
   check(await page.isVisible('#next h1:has-text("טיסה מזויפת")'), 'עדכון: המידע והמסמכים נשארו');
+  check(await page.isVisible('text=[סימן-גרסה-חדשה]'), 'עדכון: הקבצים של הגרסה החדשה הגיעו, לא עותק ישן מהמטמון של הדפדפן');
 
   // בלי רשת: טעינה מחדש, וגם פתיחה בלשונית חדשה (כמו מהמסך הבית)
   await ctx.setOffline(true);

@@ -1,6 +1,6 @@
 // שומר את כל האפליקציה בטלפון, כדי שתעבוד בלי רשת.
 // בכל שינוי בקבצים: להעלות את מספר הגרסה, ולהוסיף לכאן כל קובץ חדש שהאפליקציה טוענת.
-const CACHE = 'tik-v5';
+const CACHE = 'tik-v6';
 const PRECACHE = [
   './',
   './index.html',
@@ -17,7 +17,10 @@ const PRECACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  // cache: 'reload' מביא כל קובץ מהשרת ולא מהמטמון של הדפדפן. בלי זה, גרסה שעולה תוך 10 דקות
+  // מהקודמת נשמרת עם הקבצים הישנים (GitHub Pages אומר לדפדפן לשמור קבצים 10 דקות).
+  const fresh = PRECACHE.map((u) => new Request(u, { cache: 'reload' }));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(fresh)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {

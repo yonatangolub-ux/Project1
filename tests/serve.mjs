@@ -22,7 +22,8 @@ export function serve(port = 8080, prefix = '/Project1', overrides = new Map()) 
       const file = path.join(root, p);
       if (!file.startsWith(root + path.sep)) throw new Error('outside root');
       const data = overrides.has(p) ? overrides.get(p) : await readFile(file);
-      res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
+      // כמו GitHub Pages: הדפדפן שומר כל קובץ 10 דקות
+      res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'max-age=600' });
       res.end(data);
     } catch {
       res.writeHead(404);
