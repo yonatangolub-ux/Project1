@@ -128,3 +128,17 @@ export function parseImport(text) {
   });
   return { transitions, pinned: strList(data.pinned) };
 }
+
+// הגדלה של מסמך בלחיצה: פי כמה מגדילים.
+export const ZOOM = 2.5;
+
+// לאן לגלול אחרי הגדלה או הקטנה, כדי שהנקודה שנלחצה תישאר מתחת לאצבע.
+// rx, ry: איפה בתוך התמונה לחצו (0 עד 1). img: מיקום וגודל התמונה אחרי השינוי, בתוך אזור הגלילה.
+// tap: איפה האצבע בתוך החלון. view: גודל החלון. content: גודל כל התוכן אחרי השינוי.
+export function zoomScroll({ rx, ry, img, tap, view, content }) {
+  const fit = (v, max) => Math.max(0, Math.min(Math.round(v), Math.max(0, Math.round(max))));
+  return {
+    left: fit(img.left + rx * img.width - tap.x, content.width - view.width),
+    top: fit(img.top + ry * img.height - tap.y, content.height - view.height),
+  };
+}

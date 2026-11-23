@@ -28,14 +28,19 @@
 
   <div id="viewer" hidden>
     <div class="viewer-bar">
-      <button id="viewer-close" type="button">✕ סגירה</button>
       <span id="viewer-title"></span>
+      <span id="viewer-hint">לחיצה על המסמך מגדילה</span>
     </div>
-    <div id="viewer-pages"></div>
-    <div class="viewer-tools">
-      <button id="viewer-original" type="button" hidden>פתיחת הקובץ המקורי</button>
-      <button id="viewer-replace" type="button">החלפת קובץ</button>
-      <button id="viewer-delete" type="button" class="danger">מחיקת המסמך</button>
+    <div id="viewer-scroll" dir="ltr">
+      <div id="viewer-pages"></div>
+      <div class="viewer-tools" dir="rtl">
+        <button id="viewer-original" type="button" hidden>פתיחת הקובץ המקורי</button>
+        <button id="viewer-replace" type="button">החלפת קובץ</button>
+        <button id="viewer-delete" type="button" class="danger">מחיקת המסמך</button>
+      </div>
+    </div>
+    <div class="viewer-foot">
+      <button id="viewer-close" type="button">✕ סגירה</button>
     </div>
   </div>
 

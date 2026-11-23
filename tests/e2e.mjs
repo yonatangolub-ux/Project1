@@ -47,6 +47,10 @@ try {
   const pdfBuf = await fx.pdf({ format: 'A5', printBackground: true });
   await fx.setContent('<div style="font:40px sans-serif;padding:40px;background:#e8e0c8;height:400px">FAKE PASSPORT</div>');
   const pngBuf = await fx.screenshot();
+  // צילום מסך של מייל מהטלפון: גבוה וצר, עם אותיות קטנות
+  await fx.setViewportSize({ width: 400, height: 1400 });
+  await fx.setContent(`<div style="font:13px sans-serif;padding:16px;background:#fff">${'FAKE RECEIPT LINE 000<br>'.repeat(80)}</div>`);
+  const shotBuf = await fx.screenshot();
   await fx.close();
 
   const ctx = await browser.newContext({
@@ -149,6 +153,52 @@ try {
   await page.screenshot({ path: `${OUT}/2-viewer.png` });
   await page.goBack();
   check(await page.isHidden('#viewer'), 'כפתור "חזרה" סוגר את המסמך');
+
+  // חיכוכים 23.11: צילום מסך נפתח ברוחב מלא ומגדילים אותו בלחיצה, ו"סגירה" בהישג האגודל
+  await page.click('#pinned button.doc.add');
+  await page.fill('#form-doc [name=name]', 'קבלה');
+  const [fc4] = await Promise.all([page.waitForEvent('filechooser'), page.click('#form-doc button[type=submit]')]);
+  await fc4.setFiles({ name: 'fake-receipt.png', mimeType: 'image/png', buffer: shotBuf });
+  await page.waitForSelector('#pinned button.doc.has:has-text("קבלה")');
+  await page.click('#pinned button.doc.has:has-text("קבלה")');
+  await page.waitForSelector('#viewer:not([hidden]) img');
+  await page.waitForFunction(() => document.querySelector('#viewer img').complete);
+  const vh = 915;
+  if (await page.isVisible('#toast')) {
+    const t = await page.$eval('#toast', (e) => e.getBoundingClientRect().toJSON());
+    const c = await page.$eval('#viewer-close', (b) => b.getBoundingClientRect().toJSON());
+    check(t.bottom <= c.top, 'ההודעה הקופצת לא מסתירה את "סגירה"');
+  }
+  const closeBox = await page.$eval('#viewer-close', (b) => b.getBoundingClientRect().toJSON());
+  check(closeBox.bottom <= vh && closeBox.top >= vh * 0.8, `"סגירה" בתחתית המסך, בהישג האגודל (${Math.round(closeBox.top)}–${Math.round(closeBox.bottom)} מתוך ${vh})`);
+  check(closeBox.width >= 300 && closeBox.height >= 48, '"סגירה" גדול מספיק לאגודל');
+  const imgBox = await page.$eval('#viewer img', (i) => i.getBoundingClientRect().toJSON());
+  check(Math.abs(imgBox.width - 412) <= 1, 'התמונה נפתחת ברוחב המסך המלא');
+  const tap = { x: Math.round(imgBox.left + imgBox.width * 0.7), y: Math.round(imgBox.top + 400) }; // נקודה שרואים על המסך
+  const ry = (tap.y - imgBox.top) / imgBox.height;
+  await page.touchscreen.tap(tap.x, tap.y);
+  await page.waitForSelector('#viewer-pages.zoomed');
+  const z = await page.$eval('#viewer img', (i) => i.getBoundingClientRect().toJSON());
+  check(z.width >= imgBox.width * 2, `לחיצה מגדילה את התמונה (פי ${(z.width / imgBox.width).toFixed(1)})`);
+  const landed = { x: z.left + z.width * 0.7, y: z.top + z.height * ry };
+  check(Math.abs(landed.x - tap.x) <= 3 && Math.abs(landed.y - tap.y) <= 3, 'ההגדלה סביב הנקודה שנלחצה');
+  await page.screenshot({ path: `${OUT}/2b-zoomed.png` });
+  const scrolled = await page.$eval('#viewer-scroll', (s) => { s.scrollBy(150, 0); return s.scrollLeft; });
+  check(scrolled > 0, 'בהגדלה אפשר להזיז את התמונה הצידה');
+  check(await page.$eval('#viewer-close', (b) => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), '"סגירה" נשאר על המסך גם בהגדלה');
+  await page.touchscreen.tap(tap.x, tap.y);
+  await page.waitForSelector('#viewer-pages:not(.zoomed)');
+  const back = await page.$eval('#viewer img', (i) => i.getBoundingClientRect().width);
+  check(Math.abs(back - 412) <= 1, 'לחיצה נוספת מחזירה לגודל רגיל');
+  await page.touchscreen.tap(tap.x, tap.y); // שוב מוגדל, כדי לבדוק שפתיחה הבאה מתחילה רגיל
+  await page.click('#viewer-close');
+  await page.waitForSelector('#viewer', { state: 'hidden' });
+  check(true, '"סגירה" סוגר את המסמך');
+  await page.click('#pinned button.doc.has:has-text("קבלה")');
+  await page.waitForSelector('#viewer:not([hidden]) img');
+  check(await page.$eval('#viewer-pages', (p) => !p.classList.contains('zoomed')), 'מסמך נפתח שוב בגודל רגיל');
+  await page.goBack();
+  await page.waitForSelector('#viewer', { state: 'hidden' });
 
   // טופס ידני: השעה נשמרת לפי שעון הטלפון
   const local = await page.evaluate(() => {

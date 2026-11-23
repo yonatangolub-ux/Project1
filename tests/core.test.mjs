@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   splitTransitions, activeUntil, formatLocal, untilText, statusText,
   offsetString, withOffset, toLocalInputValue, offsetOf, parseImport,
-  docNamesFromText, GRACE_MS,
+  docNamesFromText, GRACE_MS, ZOOM, zoomScroll,
 } from '../core.js';
 
 const H = 3600 * 1000;
@@ -142,4 +142,34 @@ test('ייבוא שגוי מחזיר הודעה ברורה בעברית', () => 
   assert.throws(() => parseImport(JSON.stringify({ transitions: [{ id: 'a', title: 'x', start: '2030-01-10T10:00' }] })), /מעבר 1: .*אזור זמן/);
   assert.throws(() => parseImport(JSON.stringify({ transitions: [{ id: 'a', title: 'x', start: '2030-01-10T10:00:00Z', end: '2030-01-10T09:00:00Z' }] })), /מעבר 1: ההגעה לפני היציאה/);
   assert.throws(() => parseImport(JSON.stringify({ transitions: [{ title: 'x', start: '2030-01-10T10:00:00Z' }] })), /מעבר 1: חסר id/);
+});
+
+// חיכוך 23.11: פקיד ניסה להגדיל צילום מסך של אישור ולא הצליח. לחיצה מגדילה סביב הנקודה שנלחצה.
+test('הגדלה: הנקודה שנלחצה נשארת מתחת לאצבע', () => {
+  const view = { width: 400, height: 800 };
+  const img = { left: 0, top: 0, width: 400 * ZOOM, height: 300 * ZOOM };
+  const content = { width: img.width, height: 2000 };
+  const pos = zoomScroll({ rx: 0.7, ry: 0.5, img, tap: { x: 280, y: 150 }, view, content });
+  assert.equal(pos.left - 0 + 280, Math.round(0.7 * img.width)); // אותה נקודה במסמך, אותו מקום על המסך
+  assert.equal(pos.top + 150, Math.round(0.5 * img.height));
+  assert.ok(ZOOM >= 2, 'הגדלה מספיקה כדי לקרוא אותיות קטנות');
+});
+
+test('הגדלה: לא גוללים אל מחוץ למסמך', () => {
+  const view = { width: 400, height: 800 };
+  const img = { left: 0, top: 0, width: 1000, height: 750 };
+  const content = { width: 1000, height: 900 };
+  const corner = zoomScroll({ rx: 0, ry: 0, img, tap: { x: 300, y: 300 }, view, content });
+  assert.deepEqual(corner, { left: 0, top: 0 });
+  const edge = zoomScroll({ rx: 1, ry: 1, img, tap: { x: 10, y: 10 }, view, content });
+  assert.deepEqual(edge, { left: 600, top: 100 });
+});
+
+test('הקטנה חזרה: התמונה נשארת במקום שלה ולא קופצת להתחלה', () => {
+  const view = { width: 400, height: 800 };
+  // עמוד שני של PDF, אחרי הקטנה
+  const img = { left: 0, top: 600, width: 400, height: 560 };
+  const content = { width: 400, height: 1800 };
+  const pos = zoomScroll({ rx: 0.5, ry: 0.5, img, tap: { x: 200, y: 400 }, view, content });
+  assert.deepEqual(pos, { left: 0, top: 600 + 280 - 400 });
 });

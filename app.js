@@ -3,6 +3,7 @@ import * as db from './db.js';
 import {
   splitTransitions, formatLocal, statusText, parseImport,
   withOffset, toLocalInputValue, offsetMinutesOf, offsetString, docNamesFromText,
+  ZOOM, zoomScroll,
 } from './core.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -172,8 +173,9 @@ async function openViewer(name) {
   $('#viewer-original').hidden = !viewerOriginal;
   $('#viewer-title').textContent = name;
   $('#viewer-pages').replaceChildren(...viewerUrls.map((u, i) => h('img', { src: u, alt: `${name}, עמוד ${i + 1}` })));
+  setZoomed(false);
   $('#viewer').hidden = false;
-  $('#viewer').scrollTop = 0;
+  $('#viewer-scroll').scrollTo(0, 0);
   document.body.classList.add('viewing');
   history.pushState({ viewer: name }, ''); // כפתור "חזרה" של אנדרואיד סוגר את המסמך
 }
@@ -184,6 +186,32 @@ function closeViewer() {
   viewerUrls.forEach((u) => URL.revokeObjectURL(u));
   viewerUrls = [];
 }
+
+// לחיצה על המסמך מגדילה אותו סביב הנקודה שנלחצה, לחיצה נוספת מחזירה. הזזה בגלילה רגילה.
+function setZoomed(on) {
+  $('#viewer-pages').classList.toggle('zoomed', on);
+  $('#viewer-pages').style.width = on ? `${ZOOM * 100}%` : '';
+  $('#viewer-hint').textContent = on ? 'לחיצה נוספת מקטינה' : 'לחיצה על המסמך מגדילה';
+}
+
+$('#viewer-pages').addEventListener('click', (e) => {
+  const img = e.target.closest('img');
+  if (!img) return;
+  const box = img.getBoundingClientRect();
+  const rx = (e.clientX - box.left) / box.width;
+  const ry = (e.clientY - box.top) / box.height;
+  const scroller = $('#viewer-scroll');
+  const view = scroller.getBoundingClientRect();
+  setZoomed(!$('#viewer-pages').classList.contains('zoomed'));
+  const pos = zoomScroll({
+    rx, ry,
+    img: { left: img.offsetLeft, top: img.offsetTop, width: img.offsetWidth, height: img.offsetHeight },
+    tap: { x: e.clientX - view.left, y: e.clientY - view.top },
+    view: { width: scroller.clientWidth, height: scroller.clientHeight },
+    content: { width: scroller.scrollWidth, height: scroller.scrollHeight },
+  });
+  scroller.scrollTo(pos.left, pos.top);
+});
 
 window.addEventListener('popstate', () => { if (!$('#viewer').hidden) closeViewer(); });
 $('#viewer-close').addEventListener('click', () => history.back());
