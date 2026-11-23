@@ -113,18 +113,27 @@ try {
   await fc1.setFiles({ name: 'fake-ticket.pdf', mimeType: 'application/pdf', buffer: pdfBuf });
   await page.waitForSelector('#next button.doc.has:has-text("כרטיס")', { timeout: 30000 });
   check(true, 'PDF הועלה');
-  const [fc2] = await Promise.all([page.waitForEvent('filechooser'), page.click('#pinned button.doc.missing:has-text("דרכון")')]);
+  // חיכוך 22.11: מסמכים בשני מקומות. אין יותר "תמיד בהישג יד": ספרייה אחת מקופלת למטה, והכרטיס מציג קיצורי דרך.
+  check(!(await page.$('#pinned')) && !(await page.isVisible('text=תמיד בהישג יד')), 'אין יותר "תמיד בהישג יד" בראש המסך');
+  check(await page.$eval('#library details', (d) => !d.open), '"כל המסמכים" מקופל כברירת מחדל');
+  const [fc2] = await Promise.all([page.waitForEvent('filechooser'), page.click('#next button.doc.missing:has-text("דרכון")')]);
   await fc2.setFiles({ name: 'fake-passport.png', mimeType: 'image/png', buffer: pngBuf });
-  await page.waitForSelector('#pinned button.doc.has:has-text("דרכון")');
-  check(await page.isVisible('#next button.doc.has:has-text("דרכון")'), 'מסמך משותף לפי שם: הדרכון מופיע גם במעבר');
+  await page.waitForSelector('#next button.doc.has:has-text("דרכון")');
+  const visiblePassports = await page.locator('button.doc:has-text("דרכון")').filter({ visible: true }).count();
+  check(visiblePassports === 1, `הדרכון מופיע פעם אחת על המסך (${visiblePassports})`);
+  await page.click('#library summary');
+  check(await page.isVisible('#library button.doc.has:has-text("דרכון")'), 'מסמך שהועלה בכרטיס נמצא גם בספרייה');
+  check(await page.isVisible('#library button.doc.missing:has-text("ויזה")'), 'מסמך קבוע מהייבוא שעוד לא הועלה מחכה בספרייה');
 
   // מסמך קבוע חדש דרך החלון
-  await page.click('#pinned button.doc.add');
+  await page.click('#library button.doc.add');
   await page.fill('#form-doc [name=name]', 'ביטוח');
   const [fc3] = await Promise.all([page.waitForEvent('filechooser'), page.click('#form-doc button[type=submit]')]);
   await fc3.setFiles({ name: 'fake-insurance.png', mimeType: 'image/png', buffer: pngBuf });
-  await page.waitForSelector('#pinned button.doc.has:has-text("ביטוח")');
-  check(true, 'מסמך קבוע חדש נוסף דרך החלון');
+  await page.waitForSelector('#library button.doc.has:has-text("ביטוח")');
+  check(true, 'מסמך חדש נוסף לספרייה דרך החלון, והספרייה נשארה פתוחה');
+  check(!(await page.isVisible('#next button.doc:has-text("ביטוח")')), 'מסמך מהספרייה לא נכנס לכרטיס של מעבר');
+  check((await page.textContent('#library summary')).includes('4'), 'הספרייה מציגה כמה מסמכים יש בה (4)');
   await page.waitForTimeout(3200); // שההודעה תיעלם לפני הצילום
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${OUT}/1-main.png` });
@@ -155,12 +164,13 @@ try {
   check(await page.isHidden('#viewer'), 'כפתור "חזרה" סוגר את המסמך');
 
   // חיכוכים 23.11: צילום מסך נפתח ברוחב מלא ומגדילים אותו בלחיצה, ו"סגירה" בהישג האגודל
-  await page.click('#pinned button.doc.add');
+  if (!(await page.$eval('#library details', (d) => d.open))) await page.click('#library summary');
+  await page.click('#library button.doc.add');
   await page.fill('#form-doc [name=name]', 'קבלה');
   const [fc4] = await Promise.all([page.waitForEvent('filechooser'), page.click('#form-doc button[type=submit]')]);
   await fc4.setFiles({ name: 'fake-receipt.png', mimeType: 'image/png', buffer: shotBuf });
-  await page.waitForSelector('#pinned button.doc.has:has-text("קבלה")');
-  await page.click('#pinned button.doc.has:has-text("קבלה")');
+  await page.waitForSelector('#library button.doc.has:has-text("קבלה")');
+  await page.click('#library button.doc.has:has-text("קבלה")');
   await page.waitForSelector('#viewer:not([hidden]) img');
   await page.waitForFunction(() => document.querySelector('#viewer img').complete);
   const vh = 915;
@@ -204,11 +214,15 @@ try {
   await page.click('#viewer-close');
   await page.waitForSelector('#viewer', { state: 'hidden' });
   check(true, '"סגירה" סוגר את המסמך');
-  await page.click('#pinned button.doc.has:has-text("קבלה")');
+  await page.click('#library button.doc.has:has-text("קבלה")');
   await page.waitForSelector('#viewer:not([hidden]) img');
   check(await page.$eval('#viewer-pages', (p) => !p.classList.contains('zoomed')), 'מסמך נפתח שוב בגודל רגיל');
-  await page.goBack();
+  // מחיקה מוציאה את המסמך מהספרייה
+  page.once('dialog', (d) => d.accept());
+  await page.click('#viewer-delete');
   await page.waitForSelector('#viewer', { state: 'hidden' });
+  await page.waitForSelector('#library button.doc:has-text("קבלה")', { state: 'detached' });
+  check(true, 'מסמך שנמחק יוצא מהספרייה');
 
   // טופס ידני: השעה נשמרת לפי שעון הטלפון
   const local = await page.evaluate(() => {
@@ -268,10 +282,15 @@ try {
   await fresh.waitForSelector('#viewer:not([hidden]) img');
   check(await fresh.$eval('#viewer img', (img) => img.complete && img.naturalWidth >= 1000), 'בלי רשת: הכרטיס נפתח');
   await fresh.goBack();
-  await fresh.click('#pinned button.doc.has:has-text("דרכון")');
+  await fresh.click('#next button.doc.has:has-text("דרכון")');
   await fresh.waitForSelector('#viewer:not([hidden]) img');
-  check(await fresh.$eval('#viewer img', (img) => img.complete && img.naturalWidth > 0), 'בלי רשת: הדרכון נפתח');
+  check(await fresh.$eval('#viewer img', (img) => img.complete && img.naturalWidth > 0), 'בלי רשת: הדרכון נפתח מהכרטיס');
   check(await fresh.isHidden('#viewer-original'), 'לתמונה אין כפתור "קובץ מקורי"');
+  await fresh.goBack();
+  await fresh.click('#library summary');
+  await fresh.click('#library button.doc.has:has-text("ביטוח")');
+  await fresh.waitForSelector('#viewer:not([hidden]) img');
+  check(true, 'בלי רשת: הביטוח נפתח מהספרייה');
   await fresh.goBack();
   await fresh.waitForTimeout(300); // הדפדפן משחזר את מיקום הגלילה אחרי "חזרה"
   await fresh.evaluate(() => window.scrollTo(0, 0));

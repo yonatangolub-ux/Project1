@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   splitTransitions, activeUntil, formatLocal, untilText, statusText,
   offsetString, withOffset, toLocalInputValue, offsetOf, parseImport,
-  docNamesFromText, GRACE_MS, ZOOM, zoomScroll, isDoubleTap,
+  docNamesFromText, GRACE_MS, ZOOM, zoomScroll, isDoubleTap, libraryNames,
 } from '../core.js';
 
 const H = 3600 * 1000;
@@ -181,4 +181,23 @@ test('לחיצה כפולה: רק שתי לחיצות קרובות בזמן וב
   assert.equal(isDoubleTap(a, { t: 1250, x: 210, y: 305 }), true);
   assert.equal(isDoubleTap(a, { t: 1600, x: 200, y: 300 }), false, 'רחוק מדי בזמן');
   assert.equal(isDoubleTap(a, { t: 1200, x: 300, y: 300 }), false, 'רחוק מדי במקום');
+});
+
+// חיכוך 22.11: מסמכים בשני מקומות. מעכשיו כל המסמכים גרים בספרייה אחת, והכרטיס מציג רק קיצורי דרך.
+test('ספרייה: קודם הקבועים לפי הסדר שלהם, אחריהם השאר לפי א-ב', () => {
+  assert.deepEqual(
+    libraryNames(['דרכון', 'ויזה'], ['קבלה', 'דרכון', 'כרטיס', 'ביטוח']),
+    ['דרכון', 'ויזה', 'ביטוח', 'כרטיס', 'קבלה'],
+  );
+});
+
+test('ספרייה: כל מסמך פעם אחת, גם קבוע שעוד לא הועלה', () => {
+  const lib = libraryNames(['ויזה', 'דרכון', 'ויזה'], ['דרכון', 'דרכון']);
+  assert.deepEqual(lib, ['ויזה', 'דרכון']);
+  assert.equal(new Set(lib).size, lib.length);
+});
+
+test('ספרייה: ריקה כשאין כלום', () => {
+  assert.deepEqual(libraryNames([], []), []);
+  assert.deepEqual(libraryNames(), []);
 });

@@ -151,3 +151,12 @@ export function isDoubleTap(prev, cur) {
   const dt = cur.t - prev.t;
   return dt >= 0 && dt <= DOUBLE_TAP_MS && Math.hypot(cur.x - prev.x, cur.y - prev.y) <= DOUBLE_TAP_PX;
 }
+
+// הספרייה "כל המסמכים": כל מסמך פעם אחת. קודם השמות הקבועים (מהייבוא או שנוספו בספרייה) לפי הסדר שלהם,
+// כולל שמות שעוד לא הועלו, ואחריהם כל שאר המסמכים שהועלו, לפי א-ב.
+export function libraryNames(pinned = [], uploaded = []) {
+  const first = [...new Set(pinned)];
+  const seen = new Set(first);
+  const rest = [...new Set(uploaded)].filter((n) => !seen.has(n)).sort((a, b) => a.localeCompare(b, 'he'));
+  return [...first, ...rest];
+}

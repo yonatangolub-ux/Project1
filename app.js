@@ -3,7 +3,7 @@ import * as db from './db.js';
 import {
   splitTransitions, formatLocal, statusText, parseImport,
   withOffset, toLocalInputValue, offsetMinutesOf, offsetString, docNamesFromText,
-  ZOOM, zoomScroll, isDoubleTap,
+  ZOOM, zoomScroll, isDoubleTap, libraryNames,
 } from './core.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -48,19 +48,23 @@ function render() {
       h('p', { class: 'muted' }, 'לוחצים "ייבוא" כדי להדביק קוד מ-Claude, או "+ מעבר" כדי להוסיף לבד.')),
   );
 
-  $('#pinned').replaceChildren(
-    h('h2', { class: 'label' }, 'תמיד בהישג יד'),
-    h('div', { class: 'docs' },
-      state.pinned.map(docButton),
-      h('button', { type: 'button', class: 'doc add', onclick: () => openDocDialog({ kind: 'pinned' }) }, '+ מסמך קבוע')),
-  );
-
   $('#later').replaceChildren(...(later.length ? [
     h('h2', { class: 'label' }, 'אחר כך'),
     ...later.map((t) => h('details', { class: 'later' },
       h('summary', {}, h('span', { class: 'later-title' }, t.title), h('span', { class: 'later-when' }, formatLocal(t.start))),
       card(t, now))),
   ] : []));
+
+  // כל המסמכים גרים כאן. הכרטיס של מעבר מציג רק קיצורי דרך למסמכים שלו.
+  // שומרים אם הספרייה פתוחה, כדי שרינדור (למשל אחרי העלאה) לא יקפל אותה.
+  const lib = libraryNames(state.pinned, [...state.docNames]);
+  const wasOpen = !!$('#library details')?.open;
+  $('#library').replaceChildren(h('details', { class: 'later library', open: wasOpen },
+    h('summary', {}, h('span', { class: 'later-title' }, 'כל המסמכים'), h('span', { class: 'later-when' }, String(lib.length))),
+    h('div', { class: 'card' },
+      h('div', { class: 'docs' },
+        lib.map(docButton),
+        h('button', { type: 'button', class: 'doc add', onclick: () => openDocDialog({ kind: 'library' }) }, '+ מסמך')))));
 }
 
 function card(t, now) {
@@ -138,7 +142,7 @@ function openDocDialog(target) {
 }
 
 async function attachDoc(target, name) {
-  if (target.kind === 'pinned') {
+  if (target.kind === 'library') {
     if (!state.pinned.includes(name)) await db.setPinned([...state.pinned, name]);
   } else {
     const t = state.transitions.find((x) => x.id === target.id);
@@ -241,6 +245,7 @@ $('#viewer-replace').addEventListener('click', async () => {
 $('#viewer-delete').addEventListener('click', async () => {
   if (!confirm(`למחוק את "${viewerName}" מהטלפון?`)) return;
   await db.del('docs', viewerName);
+  if (state.pinned.includes(viewerName)) await db.setPinned(state.pinned.filter((n) => n !== viewerName));
   history.back();
   await load();
 });
