@@ -122,11 +122,19 @@ export function parseImport(text) {
     }
     const out = { id: t.id, title: t.title.trim(), start: t.start };
     if (t.end) out.end = t.end;
-    for (const k of ['from', 'to', 'notes']) if (typeof t[k] === 'string' && t[k].trim()) out[k] = t[k].trim();
+    for (const k of ['from', 'to', 'address', 'notes']) if (typeof t[k] === 'string' && t[k].trim()) out[k] = t[k].trim();
     out.docs = strList(t.docs);
     return out;
   });
   return { transitions, pinned: strList(data.pinned) };
+}
+
+// כתובת ביעד → קישור שפותח את אפליקציית המפות של הטלפון, עם החיפוש מוכן.
+// geo: ולא קישור של גוגל, כדי שכל אפליקציית מפות תוכל לפתוח אותו (גם במדינה שבה גוגל חסום).
+// כתובת שהועתקה ממייל מגיעה לפעמים בכמה שורות, אז הופכים כל רווח ושורה חדשה לרווח אחד.
+export function mapsUrl(address) {
+  const a = String(address || '').trim().replace(/\s+/g, ' ');
+  return a ? `geo:0,0?q=${encodeURIComponent(a)}` : null;
 }
 
 // הגדלה של מסמך בלחיצה כפולה: פי כמה מגדילים.

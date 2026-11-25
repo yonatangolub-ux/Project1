@@ -75,7 +75,8 @@ try {
   const data = {
     transitions: [
       { id: 'f1', title: 'טיסה מזויפת', start: iso(now + 3 * H, 345), end: iso(now + 8 * H, 480),
-        from: 'עיר א', to: 'עיר ב', notes: 'להגיע שעתיים לפני.\nמזוודה אחת.', docs: ['כרטיס', 'דרכון'] },
+        from: 'עיר א', to: 'עיר ב', address: 'מלון מזויף, רחוב מזויף 1, עיר ב',
+        notes: 'להגיע שעתיים לפני.\nמזוודה אחת.', docs: ['כרטיס', 'דרכון'] },
       { id: 'f2', title: 'טיסה שנייה', start: iso(now + 20 * H, 480), end: iso(now + 22 * H, 420), docs: ['כרטיס'] },
       { id: 'old', title: 'מעבר שעבר', start: iso(now - 30 * H, 0), end: iso(now - 20 * H, 0) },
       { id: 'landed', title: 'טיסה שנחתה', start: iso(now - 3 * H, 480), end: iso(now - 1 * H, 420),
@@ -100,6 +101,15 @@ try {
   check((await page.textContent('#arrived .notes')).includes('הערת נחיתה מזויפת'), 'ההערות של מה שנחת מוצגות');
   check((await page.textContent('#arrived .when')).includes('הגעת'), 'הסטטוס הוא "הגעת"');
   check(!(await page.isVisible('text=טיסה שנחתה מזמן')), 'מה שנחת לפני 7 שעות כבר לא מוצג');
+
+  // חיכוך 25.11: המיקום היה רק טקסט. כתובת ביעד היא קישור שפותח את אפליקציית המפות.
+  const mapLink = page.locator('#next a.map');
+  check(await mapLink.isVisible() && (await mapLink.textContent()).includes('מלון מזויף, רחוב מזויף 1, עיר ב'), 'הכתובת ביעד מוצגת בכרטיס');
+  const mapHref = await mapLink.getAttribute('href');
+  check(mapHref === 'geo:0,0?q=' + encodeURIComponent('מלון מזויף, רחוב מזויף 1, עיר ב'), `הכתובת פותחת את אפליקציית המפות (${mapHref.slice(0, 14)}…)`);
+  const mapBox = await mapLink.boundingBox();
+  check(mapBox.height >= 48 && mapBox.width >= 300, 'כפתור המפות גדול מספיק לאגודל');
+  check(!(await page.isVisible('#arrived a.map')), 'מעבר בלי כתובת לא מציג כפתור מפות');
 
   // ייבוא חוזר עם אותו id מעדכן
   await page.click('#btn-import');
@@ -234,10 +244,16 @@ try {
   await page.fill('#form-transition [name=title]', 'אוטובוס מזויף');
   await page.fill('#form-transition [name=start]', local);
   await page.fill('#form-transition [name=notes]', 'הערה מזויפת');
+  await page.fill('#form-transition [name=address]', 'אכסניה מזויפת 7');
   await page.click('#form-transition button[type=submit]');
   await page.waitForSelector('#later summary:has-text("אוטובוס מזויף")');
   const summary = await page.textContent('#later details:has-text("אוטובוס מזויף") .later-when');
   check(summary.includes(local.slice(11)), `טופס: מעבר ידני נשמר בשעה שהוקלדה (${local.slice(11)})`);
+  await page.click('#later details:has-text("אוטובוס מזויף") summary');
+  check(await page.getAttribute('#later details:has-text("אוטובוס מזויף") a.map', 'href') === 'geo:0,0?q=' + encodeURIComponent('אכסניה מזויפת 7'), 'טופס: כתובת ביעד נשמרת ונפתחת במפות');
+  await page.click('#later details:has-text("אוטובוס מזויף") button:has-text("עריכה")');
+  check(await page.inputValue('#form-transition [name=address]') === 'אכסניה מזויפת 7', 'עריכה: הכתובת מופיעה בטופס');
+  await page.click('#dlg-form button[data-close]');
 
   // עריכה שומרת את אזור הזמן המקורי
   await page.click('#later details:has-text("טיסה שנייה") summary');
@@ -278,6 +294,7 @@ try {
   await fresh.waitForSelector('#next h1:has-text("טיסה מזויפת")', { timeout: 10000 });
   check(true, 'בלי רשת: פתיחה מחדש של האפליקציה עובדת');
   check(await fresh.isVisible('#arrived .notes:has-text("הערת נחיתה מזויפת")'), 'בלי רשת: "הגעת" מוצג עם ההערות');
+  check(await fresh.isVisible('#next a.map:has-text("מלון מזויף")'), 'בלי רשת: הכתובת ביעד מוצגת');
   await fresh.click('#next button.doc.has:has-text("כרטיס")');
   await fresh.waitForSelector('#viewer:not([hidden]) img');
   check(await fresh.$eval('#viewer img', (img) => img.complete && img.naturalWidth >= 1000), 'בלי רשת: הכרטיס נפתח');

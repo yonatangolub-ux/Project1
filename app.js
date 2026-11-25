@@ -3,7 +3,7 @@ import * as db from './db.js';
 import {
   splitTransitions, formatLocal, statusText, parseImport,
   withOffset, toLocalInputValue, offsetMinutesOf, offsetString, docNamesFromText,
-  ZOOM, zoomScroll, isDoubleTap, libraryNames,
+  ZOOM, zoomScroll, isDoubleTap, libraryNames, mapsUrl,
 } from './core.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -72,6 +72,7 @@ function card(t, now) {
     h('h1', {}, t.title),
     h('p', { class: 'when' }, formatLocal(t.start), ' · ', h('strong', {}, statusText(t, now))),
     (t.from || t.to) && h('p', { class: 'route' }, [t.from, t.to].filter(Boolean).join(' ← ')),
+    t.address && h('a', { class: 'map', href: mapsUrl(t.address) }, `📍 ${t.address}`),
     h('div', { class: 'docs' },
       (t.docs || []).map(docButton),
       h('button', { type: 'button', class: 'doc add', onclick: () => openDocDialog({ kind: 'transition', id: t.id }) }, '+ מסמך')),
@@ -274,6 +275,7 @@ function openForm(t = null) {
     f.namedItem('end').value = toLocalInputValue(t.end);
     f.namedItem('from').value = t.from || '';
     f.namedItem('to').value = t.to || '';
+    f.namedItem('address').value = t.address || '';
     f.namedItem('notes').value = t.notes || '';
     f.namedItem('docs').value = (t.docs || []).join(', ');
     $('#form-tz').textContent = 'השעות נשמרות לפי השעון של המקום, כמו שהיו.';
@@ -297,7 +299,7 @@ $('#form-transition').addEventListener('submit', async (e) => {
     docs: docNamesFromText(f.get('docs')),
   };
   if (endLocal) t.end = withOffset(endLocal, endOff);
-  for (const k of ['from', 'to', 'notes']) if (f.get(k).trim()) t[k] = f.get(k).trim();
+  for (const k of ['from', 'to', 'address', 'notes']) if (f.get(k).trim()) t[k] = f.get(k).trim();
   if (t.end && Date.parse(t.end) < Date.parse(t.start)) {
     $('#form-error').textContent = 'ההגעה לפני היציאה.';
     return;

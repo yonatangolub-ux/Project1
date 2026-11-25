@@ -52,6 +52,20 @@ section { margin-bottom: 18px; }
 .card .when { margin: 0 0 4px; font-size: 19px; }
 .card .when strong { color: var(--accent); }
 .card .route { margin: 0 0 12px; font-size: 19px; }
+.card .map {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--doc);
+  color: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
 .card .arrive { margin: 12px 0 0; color: var(--muted); }
 .card.empty p { margin: 4px 0; }
 .notes {

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   splitTransitions, activeUntil, formatLocal, untilText, statusText,
   offsetString, withOffset, toLocalInputValue, offsetOf, parseImport,
-  docNamesFromText, GRACE_MS, ZOOM, zoomScroll, isDoubleTap, libraryNames,
+  docNamesFromText, GRACE_MS, ZOOM, zoomScroll, isDoubleTap, libraryNames, mapsUrl,
 } from '../core.js';
 
 const H = 3600 * 1000;
@@ -123,7 +123,7 @@ test('שמות מסמכים מטקסט עם פסיקים', () => {
 const valid = {
   transitions: [{
     id: 'x1', title: 'טיסה', start: '2030-01-10T16:05:00+05:45', end: '2030-01-10T21:15:00+08:00',
-    from: 'א', to: 'ב', notes: 'שורה 1\nשורה 2', docs: ['כרטיס', 'דרכון'],
+    from: 'א', to: 'ב', address: '  רחוב מזויף 1, עיר ב  ', notes: 'שורה 1\nשורה 2', docs: ['כרטיס', 'דרכון'],
   }],
   pinned: ['דרכון', 'ויזה'],
 };
@@ -132,6 +132,7 @@ test('ייבוא תקין, גם כשהקוד מגיע עטוף ב-```', () => {
   const r = parseImport('```json\n' + JSON.stringify(valid) + '\n```');
   assert.equal(r.transitions.length, 1);
   assert.equal(r.transitions[0].notes, 'שורה 1\nשורה 2');
+  assert.equal(r.transitions[0].address, 'רחוב מזויף 1, עיר ב');
   assert.deepEqual(r.pinned, ['דרכון', 'ויזה']);
 });
 
@@ -200,4 +201,23 @@ test('ספרייה: כל מסמך פעם אחת, גם קבוע שעוד לא ה�
 test('ספרייה: ריקה כשאין כלום', () => {
   assert.deepEqual(libraryNames([], []), []);
   assert.deepEqual(libraryNames(), []);
+});
+
+// חיכוך 25.11: המיקום היה רק טקסט, ולראות אותו במפות דרש להקליד הכול מחדש.
+test('מפות: כתובת הופכת לקישור שפותח את אפליקציית המפות', () => {
+  const url = mapsUrl('רחוב מזויף 1, עיר ב');
+  assert.match(url, /^geo:0,0\?q=/);
+  assert.equal(decodeURIComponent(url.slice('geo:0,0?q='.length)), 'רחוב מזויף 1, עיר ב');
+  assert.ok(!/[\s#&]/.test(url), 'אין בקישור תווים ששוברים אותו');
+});
+
+test('מפות: כתובת בכמה שורות (מהמייל) הופכת לשורה אחת', () => {
+  assert.equal(mapsUrl('  מלון מזויף\nרחוב 5 &  #2\n'), mapsUrl('מלון מזויף רחוב 5 & #2'));
+  assert.equal(decodeURIComponent(mapsUrl('א\n\nב').split('q=')[1]), 'א ב');
+});
+
+test('מפות: בלי כתובת אין קישור', () => {
+  assert.equal(mapsUrl(''), null);
+  assert.equal(mapsUrl('   '), null);
+  assert.equal(mapsUrl(undefined), null);
 });
