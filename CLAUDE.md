@@ -19,4 +19,4 @@
 - `npm test`: בדיקות הלוגיקה (node --test).
 - `npm run e2e`: בדיקת קצה לקצה עם Playwright, כולל טעינה מחדש בלי רשת.
 - `npm run serve`: שרת מקומי על http://localhost:8080.
-- האתר: GitHub Pages מהענף `ccr-2fbcf67c-55dj79`, תיקיית השורש.
+- האתר: GitHub Pages מהענף `main`, תיקיית השורש. כל שינוי שעולה ל-`main` עולה לאתר.
