@@ -221,3 +221,19 @@ test('מפות: בלי כתובת אין קישור', () => {
   assert.equal(mapsUrl('   '), null);
   assert.equal(mapsUrl(undefined), null);
 });
+
+// חיכוך 25.11: להכניס מעבר דרש לבוא לסשן עם הריפו. הסקיל skills/tik-import מלמד כל Claude להכין קוד ייבוא.
+// אם הפורמט ב-core.js משתנה והדוגמה בסקיל כבר לא נקראת, הבדיקה נכשלת, כדי שהסקיל לא ילמד פורמט ישן.
+test('סקיל הייבוא: הדוגמה בסקיל עוברת ייבוא, עם כל השדות', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const md = await readFile(new URL('../skills/tik-import/SKILL.md', import.meta.url), 'utf8');
+  const block = /```json\n([\s\S]*?)```/.exec(md);
+  assert.ok(block, 'יש בסקיל דוגמת JSON');
+  const { transitions } = parseImport(block[1]);
+  assert.equal(transitions.length, 1);
+  const x = transitions[0];
+  for (const k of ['id', 'title', 'start', 'end', 'from', 'to', 'address', 'notes']) assert.ok(x[k], `השדה ${k} נשמר`);
+  assert.ok(x.docs.length > 0);
+  assert.ok(Date.parse(x.end) > Date.parse(x.start));
+  assert.match(md, /^---\nname: tik-import\ndescription: .+\n---/, 'כותרת סקיל תקינה');
+});
